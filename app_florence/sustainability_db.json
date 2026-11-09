@@ -1,0 +1,12 @@
+{
+  "marken": [
+    {"name": "Shein", "aliase": ["SHEIN", "shein"], "kategorie": "fast_fashion", "score": 8, "co2_pro_teil_kg": 14.5, "bemerkung": "Sehr hohe Umweltauswirkungen durch Ultrafast-Fashion."},
+    {"name": "Zara", "aliase": ["ZARA", "zara"], "kategorie": "fast_fashion", "score": 25, "co2_pro_teil_kg": 11.0, "bemerkung": "Pionier des Fast-Fashion-Modells mit schnellen Kollektionen."},
+    {"name": "H&M", "aliase": ["H&M", "HM", "HENNES & MAURITZ"], "kategorie": "fast_fashion", "score": 30, "co2_pro_teil_kg": 10.0, "bemerkung": "Große Produktionsmengen trotz Recycling-Initiativen."},
+    {"name": "Uniqlo", "aliase": ["UNIQLO", "uniqlo"], "kategorie": "mittel", "score": 40, "co2_pro_teil_kg": 9.0, "bemerkung": "Fokus auf langlebigere Basic-Kleidung."},
+    {"name": "Nike", "aliase": ["NIKE", "nike"], "kategorie": "mittel", "score": 40, "co2_pro_teil_kg": 9.5, "bemerkung": "Hohe Emissionen durch Sportbekleidungsproduktion."},
+    {"name": "Patagonia", "aliase": ["PATAGONIA", "patagonia"], "kategorie": "nachhaltig", "score": 85, "co2_pro_teil_kg": 5.5, "bemerkung": "Branchenvorreiter für Umweltschutz und faire Bedingungen."},
+    {"name": "Armedangels", "aliase": ["ARMEDANGELS", "armedangels"], "kategorie": "nachhaltig", "score": 85, "co2_pro_teil_kg": 5.0, "bemerkung": "Faire Mode aus Bio-Baumwolle (GOTS-zertifiziert)."},
+    {"name": "Secondhand/Vintage", "aliase": ["SECONDHAND", "VINTAGE"], "kategorie": "nachhaltig", "score": 95, "co2_pro_teil_kg": 0.5, "bemerkung": "Die nachhaltigste Wahl, da keine Neuproduktion nötig ist."}
+  ]
+}
