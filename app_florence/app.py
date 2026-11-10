@@ -21,11 +21,9 @@ h1, h2, h3 {
     color: #23382d !important;
     font-weight: 600;
 }
-/* Clean White Cards */
 div.stAlert, div[data-testid="stVerticalBlock"] > div {
     border-radius: 16px;
 }
-/* Edle grüne Buttons im Nature-Style */
 .stButton>button {
     background-color: #2d4a3e;
     color: white;
@@ -40,7 +38,6 @@ div.stAlert, div[data-testid="stVerticalBlock"] > div {
     background-color: #1f332a;
     color: white;
 }
-/* Metriken und Fortschritt */
 [data-testid="stMetricValue"] {
     color: #2d4a3e;
 }
@@ -53,7 +50,7 @@ def lade_datenbank():
     return {
       "marken": [
         # Ultra Fast Fashion (Sehr niedrig)
-        {"name": "Shein", "aliase": ["SHEIN", "shein"], "score": 8, "kategorie": "Sehr Kritisch", "begruendung":extrem hohes Überproduktionsvolumen, extrem niedrige Löhne und intransparente Synthetik-Lieferketten."},
+        {"name": "Shein", "aliase": ["SHEIN", "shein"], "score": 8, "kategorie": "Sehr Kritisch", "begruendung": "Extrem hohes Überproduktionsvolumen, extrem niedrige Löhne und intransparente Synthetik-Lieferketten."},
         {"name": "Temu", "aliase": ["TEMU", "temu"], "score": 8, "kategorie": "Sehr Kritisch", "begruendung": "Massiver Einsatz von Luftfracht und extrem kurzlebige Einweg-Konsumgüter."},
         {"name": "AliExpress", "aliase": ["ALIEXPRESS"], "score": 10, "kategorie": "Sehr Kritisch", "begruendung": "Keinerlei ökologische Standards oder Nachverfolgbarkeit der Textilien."},
         
@@ -86,7 +83,6 @@ def finde_marke_intelligent(db, text):
         return None
     text_up = text.upper()
     
-    # 1. Direkter Marken- oder Alias-Treffer
     for marke in db["marken"]:
         if marke["name"].upper() in text_up:
             return marke
@@ -94,7 +90,6 @@ def finde_marke_intelligent(db, text):
             if alias.upper() in text_up:
                 return marke
                 
-    # 2. Intelligente Textmarker (z.B. Bio-Baumwolle -> Nachhaltig)
     if "BIO" in text_up or "ORGANIC" in text_up or "GOTS" in text_up:
         return {"name": "Zertifiziertes Bio-Textil", "score": 80, "kategorie": "Nachhaltig", "begruendung": "Das Etikett weist zertifizierte Bio-Fasern auf, was den ökologischen Fußabdruck drastisch senkt."}
     if "POLYESTER" in text_up or "ELASTHAN" in text_up:
@@ -102,7 +97,6 @@ def finde_marke_intelligent(db, text):
         
     return None
 
-# --- FLORENCE-2 MODELL LADEN ---
 @st.cache_resource
 def lade_ki_modell():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -110,7 +104,6 @@ def lade_ki_modell():
     model = AutoModelForCausalLM.from_pretrained("microsoft/Florence-2-base", torch_dtype=torch.float32, trust_remote_code=True).to(device)
     return processor, model, device
 
-# --- BENUTZEROBERFLÄCHE IM CLEANEN NATURE-DESIGN ---
 st.title("🌿 EcoLens")
 st.markdown("#### Wie nachhaltig ist dein Artikel?")
 st.caption("Lade ein Foto deines Kleidungsstücks oder Waschetiketts hoch, um die Umweltauswirkungen fundiert zu prüfen.")
@@ -130,35 +123,4 @@ if uploaded_file is not None:
             with torch.no_grad():
                 gen = model.generate(input_ids=inputs["input_ids"], pixel_values=inputs["pixel_values"], max_new_tokens=256, num_beams=3)
             ocr_text = processor.batch_decode(gen, skip_special_tokens=True)[0]
-        except Exception as e:
-            ocr_text = "Patagonia Organic Cotton" # Stabiler Fallback zum Testen
-            
-    # Intelligente Markensuche
-    ergebnis = finde_marke_intelligent(db, ocr_text)
-    
-    if not ergebnis:
-        # Fallback wenn absolut nichts erkannt wurde
-        ergebnis = {"name": "Standard Kleidungsstück (Unbekannte Marke)", "score": 40, "kategorie": "Durchschnitt", "begruendung": "Keine eindeutige Marke oder Siegel auf dem Bild erkannt. Standard-Einschätzung für konventionelle Textilien."}
-
-    st.markdown("---")
-    
-    # Layout-Karten für das Ergebnis
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Erkannt", ergebnis["name"])
-    with col2:
-        st.metric("Eco Score", f"{ergebnis['score']} / 100")
-        
-    st.markdown(f"### Bewertung: {ergebnis['kategorie']}")
-    st.progress(ergebnis["score"] / 100.0)
-    
-    # Fundierte Begründung (Kernanforderung!)
-    st.info(f"💡 **Fundierte Begründung:** {ergebnis['begruendung']}")
-    
-    with st.expander("🔍 Technische Texterkennung (OCR-Rohdaten)"):
-        st.write(ocr_text if ocr_text else "Kein Text auf dem Bild gefunden.")
-
-else:
-    # Dezenter Hinweis im Startzustand (wie im Layout)
-    st.markdown("")
-    st.info("💡 Tipp: Du kannst Fotos von Logos, Etiketten oder ganzen Kleidungsstücken hochladen.")
+        except
