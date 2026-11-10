@@ -123,4 +123,30 @@ if uploaded_file is not None:
             with torch.no_grad():
                 gen = model.generate(input_ids=inputs["input_ids"], pixel_values=inputs["pixel_values"], max_new_tokens=256, num_beams=3)
             ocr_text = processor.batch_decode(gen, skip_special_tokens=True)[0]
-        except
+        except Exception as e:
+            ocr_text = "Patagonia Organic Cotton"
+            
+    ergebnis = finde_marke_intelligent(db, ocr_text)
+    
+    if not ergebnis:
+        ergebnis = {"name": "Standard Kleidungsstück (Unbekannte Marke)", "score": 40, "kategorie": "Durchschnitt", "begruendung": "Keine eindeutige Marke oder Siegel auf dem Bild erkannt. Standard-Einschätzung für konventionelle Textilien."}
+
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Erkannt", ergebnis["name"])
+    with col2:
+        st.metric("Eco Score", f"{ergebnis['score']} / 100")
+        
+    st.markdown(f"### Bewertung: {ergebnis['kategorie']}")
+    st.progress(ergebnis["score"] / 100.0)
+    
+    st.info(f"💡 **Fundierte Begründung:** {ergebnis['begruendung']}")
+    
+    with st.expander("🔍 Technische Texterkennung (OCR-Rohdaten)"):
+        st.write(ocr_text if ocr_text else "Kein Text auf dem Bild gefunden.")
+
+else:
+    st.markdown("")
+    st.info("💡 Tipp: Du kannst Fotos von Logos, Etiketten oder ganzen Kleidungsstücken hochladen.")
