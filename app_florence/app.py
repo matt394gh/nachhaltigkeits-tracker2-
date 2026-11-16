@@ -1,7 +1,6 @@
-import streamlit as st
-from PIL import Image, ImageEnhance, ImageOps
-import torch
-from transformers import AutoProcessor, AutoModelForCausalLM
+
+   import streamlit as st
+from PIL import Image, ImageOps
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
@@ -17,7 +16,7 @@ if "active_tab" not in st.session_state:
 if "scan_history" not in st.session_state:
     st.session_state.scan_history = []
 
-# --- ECHTES MOBILE-APP CSS (HANDY-FRAME & BOTTOM NAV) ---
+# --- MOBILE-APP CSS (HANDY-FRAME & BOTTOM NAV) ---
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
@@ -139,85 +138,39 @@ header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- ANALYSE-LOGIK FÜR MATERIALIEN ---
-def analysiere_textmaterial(text):
-    if not text:
-        # Fallback wenn Text leer ist
-        return {
-            "name": "Standard Textil (Konventionell)",
-            "score": 42,
-            "kategorie": "Konventionelle Massenware",
-            "farbe": "#ef6c00",
-            "begruendung": "Es konnte kein spezifischer Text ausgelesen werden. Dies entspricht der Standard-Einschätzung für konventionelle Textilien ohne Bio-Siegel."
-        }
-        
-    t_up = text.upper()
-
-    if any(w in t_up for w in ["BIO", "ORGANIC", "GOTS", "RECYCLED", "RECYCELT", "TENCEL", "LYOCELL", "HEMP", "HANF", "LINEN", "LEINEN"]):
-        return {
-            "name": "Nachhaltiges Bio- / Naturfaser-Textil",
-            "score": 85,
-            "kategorie": "Vorbildlich & Nachhaltig",
-            "farbe": "#2e7d32",
-            "begruendung": f"Erkannter Text: '{text}'. Das Waschetikett weist zertifizierte Bio-Fasern oder umweltschonende Materialien aus."
-        }
-
-    if any(w in t_up for w in ["COTTON", "BAUMWOLLE", "COTON", "ALGODON", "WOOL", "WOLLE", "SEIDE", "SILK"]):
-        return {
-            "name": "Naturfaser (Baumwolle / Wolle)",
-            "score": 50,
-            "kategorie": "Mittelfeld",
-            "farbe": "#ef6c00",
-            "begruendung": f"Erkannter Text: '{text}'. Reine Naturfaser, biologisch abbaubar, im konventionellen Anbau jedoch mit hohem Wasserbedarf."
-        }
-
-    if any(w in t_up for w in ["POLYESTER", "ELASTHAN", "ELASTANE", "NYLON", "POLYAMID", "ACRYLIC", "AKRYL", "VISCOSE", "VISKOSE"]):
-        return {
-            "name": "Synthetik- / Kunstfaser-Mix",
-            "score": 32,
-            "kategorie": "Kritischer Stoff",
-            "farbe": "#c62828",
-            "begruendung": f"Erkannter Text: '{text}'. Erdölbasierte Kunstfasern erkannt. Verursacht beim Waschen Mikroplastik."
-        }
-
-    return {
-        "name": f"Textil mit Etikett-Hinweis",
-        "score": 45,
-        "kategorie": "Standard-Textil",
-        "farbe": "#607d8b",
-        "begruendung": f"Ausgelesener Text: '{text}'. Konventionelles Textilmaterial ohne spezielle Öko-Zertifizierung."
+# --- DATENBANK FÜR DIE MATERIALIEN ---
+MATERIAL_DATEN = {
+    "🌿 Bio-Baumwolle / GOTS": {
+        "score": 88,
+        "kategorie": "Vorbildlich & Nachhaltig",
+        "farbe": "#2e7d32",
+        "begruendung": "Zertifizierte Bio-Naturfaser. Ohne synthetische Pestizide angebaut, schützt Grundwasser und Ökosysteme."
+    },
+    "♻️ Recyceltes Polyester / Nylon": {
+        "score": 75,
+        "kategorie": "Gutes Recycling-Material",
+        "farbe": "#388e3c",
+        "begruendung": "Hergestellt aus recycelten Plastikflaschen oder Alttextilien. Reduziert den Erdölbedarf erheblich."
+    },
+    "🌱 Leinen / Hanf / Tencel": {
+        "score": 90,
+        "kategorie": "Hervorragende Öko-Bilanz",
+        "farbe": "#1b5e20",
+        "begruendung": "Sehr nachhaltige Naturfasern, die extrem wenig Wasser im Anbau benötigen und biologisch abbaubar sind."
+    },
+    "☁️ Konventionelle Baumwolle": {
+        "score": 48,
+        "kategorie": "Mittelfeld (Konventionell)",
+        "farbe": "#ef6c00",
+        "begruendung": "Reine Naturfaser und biologisch abbaubar, aber im konventionellen Anbau mit hohem Wasser- und Pestizideinsatz belastet."
+    },
+    "🧪 Polyester / Viskose / Elastan": {
+        "score": 30,
+        "kategorie": "Kritischer Stoff",
+        "farbe": "#c62828",
+        "begruendung": "Erdölbasierte Kunstfaser. Verursacht beim Waschen Mikroplastik im Wasser und ist extrem langlebig in der Natur."
     }
-
-# --- FLORENCE-2 KI-MODELL ---
-@st.cache_resource
-def lade_ki_modell():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    processor = AutoProcessor.from_pretrained("microsoft/Florence-2-base", trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        "microsoft/Florence-2-base",
-        torch_dtype=torch.float32,
-        trust_remote_code=True
-    ).to(device)
-    return processor, model, device
-
-def lese_etikett_bild(image):
-    try:
-        processor, model, device = lade_ki_modell()
-        img = ImageOps.exif_transpose(image.convert("RGB"))
-        img = ImageEnhance.Contrast(img).enhance(1.4)
-        img = ImageEnhance.Sharpness(img).enhance(1.6)
-
-        inputs = processor(text="<OCR>", images=img, return_tensors="pt").to(device)
-        with torch.no_grad():
-            gen = model.generate(
-                input_ids=inputs["input_ids"],
-                pixel_values=inputs["pixel_values"],
-                max_new_tokens=256,
-                num_beams=3
-            )
-        return processor.batch_decode(gen, skip_special_tokens=True)[0]
-    except Exception:
-        return ""
+}
 
 # --- TOP APP HEADER ---
 st.markdown("""
@@ -228,7 +181,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB 1: SCANNEN
+# TAB 1: SCANNEN & AUSWÄHLEN
 # ==========================================
 if st.session_state.active_tab == "scan":
     st.markdown("""
@@ -236,58 +189,45 @@ if st.session_state.active_tab == "scan":
         <div class="scan-icon-circle">🏷️</div>
         <h3 style="margin:0 0 6px 0; color:#1b3026; font-size:1.15rem;">Waschetikett analysieren</h3>
         <p style="margin:0; color:#5c7a6c; font-size:0.85rem;">
-            Fotografiere das Waschetikett oder tippe den Text manuell ein.
+            Foto hochladen und Material vom Etikett direkt auswählen – 100% präzise ohne OCR-Fehler.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    input_mode = st.radio(
-        "Modus",
-        ["📁 Foto hochladen", "📷 Kamera öffnen", "⌨️ Text manuell eingeben"],
-        horizontal=True,
+    uploaded_file = st.file_uploader("Etikett-Foto hochladen", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+    
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        st.image(image, use_container_width=True)
+
+    st.markdown("<p style='font-size:0.88rem; color:#1b3026; font-weight:700; margin-top:10px;'>👉 Was steht auf dem Waschetikett?</p>", unsafe_allow_html=True)
+    
+    # Schnell-Auswahl Buttons für die echten Materialien
+    ausgewaehltes_material = st.selectbox(
+        "Material wählen",
+        list(MATERIAL_DATEN.keys()),
         label_visibility="collapsed"
     )
 
-    ocr_text = ""
-    uploaded_file = None
+    if st.button("🔍 Etikett auswerten"):
+        info = MATERIAL_DATEN[ausgewaehltes_material]
+        ergebnis = {
+            "name": ausgewaehltes_material,
+            "score": info["score"],
+            "kategorie": info["kategorie"],
+            "farbe": info["farbe"],
+            "begruendung": info["begruendung"]
+        }
 
-    if input_mode == "📷 Kamera öffnen":
-        uploaded_file = st.camera_input("Etikett fotografieren", label_visibility="collapsed")
-        if uploaded_file:
-            image = Image.open(uploaded_file)
-            st.image(image, use_container_width=True)
-            with st.spinner("Lese Etikett aus..."):
-                ocr_text = lese_etikett_bild(image)
-
-    elif input_mode == "📁 Foto hochladen":
-        uploaded_file = st.file_uploader("Bild auswählen", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
-        if uploaded_file:
-            image = Image.open(uploaded_file)
-            st.image(image, use_container_width=True)
-            with st.spinner("Lese Etikett aus..."):
-                ocr_text = lese_etikett_bild(image)
-
-    else:
-        st.markdown("<p style='font-size:0.85rem; color:#2d4a3e; font-weight:600; margin-bottom:4px;'>Material vom Etikett eintippen:</p>", unsafe_allow_html=True)
-        ocr_text = st.text_input("z.B. 100% Cotton, Polyester, Bio Baumwolle", placeholder="Hier tippen...", label_visibility="collapsed")
-
-    # WICHTIG: Es wird jetzt IMMER ein Ergebnis ausgegeben (kein leerer Bildschirm mehr!)
-    if input_mode != "⌨️ Text manuell eingeben" and uploaded_file is None:
-        st.info("💡 Lade ein Foto hoch oder wähle den manuellen Modus, um die Analyse zu starten.")
-    else:
-        ergebnis = analysiere_textmaterial(ocr_text)
-
-        # Im Verlauf speichern
-        if not st.session_state.scan_history or st.session_state.scan_history[0]["name"] != ergebnis["name"]:
-            st.session_state.scan_history.insert(0, ergebnis)
+        # In den Verlauf eintragen
+        st.session_state.scan_history.insert(0, ergebnis)
 
         st.markdown(f"""
         <div class="result-card">
             <span class="score-pill" style="background-color: {ergebnis['farbe']}18; color: {ergebnis['farbe']};">
                 ● {ergebnis['kategorie']}
             </span>
-            <h2 style="margin: 2px 0 4px 0; color: #1b3026; font-size: 1.35rem;">{ergebnis['name']}</h2>
-            <p style="margin: 0; color: #5c7a6c; font-size: 0.8rem;">Erkannter Text: <i>"{ocr_text if ocr_text else 'Kein Text erkannt (Standard-Wert aktiv)'}"</i></p>
+            <h2 style="margin: 2px 0 4px 0; color: #1b3026; font-size: 1.25rem;">{ergebnis['name']}</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -295,7 +235,7 @@ if st.session_state.active_tab == "scan":
         with col1:
             st.metric("Eco Score", f"{ergebnis['score']} / 100")
         with col2:
-            st.metric("Status", "Analysiert ✓")
+            st.metric("Status", "Erfolgreich ✓")
 
         st.progress(ergebnis["score"] / 100.0)
         st.info(f"💡 **Auswertung:** {ergebnis['begruendung']}")
@@ -334,10 +274,7 @@ elif st.session_state.active_tab == "info":
     st.markdown("""
     <div class="result-card">
         <p style="color:#23382d; font-size:0.92rem; line-height:1.5;">
-            EcoLens analysiert Waschetiketten zuverlässig auf ihre Materialzusammensetzung. 
-        </p>
-        <p style="color:#23382d; font-size:0.92rem; line-height:1.5;">
-            Sollte die automatische Texterkennung einmal nicht greifen, greift automatisch ein intelligenter Fallback, oder du kannst den Text direkt per Tastatur eingeben.
+            Da winzige Waschetiketten-Schriften oft schwer von Kameras lesbar sind, garantiert dieser professionelle Modus absolute Zuverlässigkeit. Foto hochladen, Material antippen – fertig!
         </p>
     </div>
     """, unsafe_allow_html=True)
