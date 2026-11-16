@@ -1,60 +1,81 @@
+
 import streamlit as st
 from PIL import Image
 import torch
 from transformers import AutoProcessor, AutoModelForCausalLM
 
-# --- SEITEN-KONFIGURATION ---
+# --- SEITEN-KONFIGURATION (OPTIMIERT FÜR MOBILE / HANDY-DESIGN) ---
 st.set_page_config(
-    page_title="EcoLens - Nachhaltigkeits-Analyse",
+    page_title="EcoLens",
     page_icon="🌿",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# --- DEIN EXakter NATURE & EARTH DESIGN (1-zu-1 Layout) ---
+# --- EXAKTES MOBILE & NATURE-DESIGN (CSS) ---
 st.markdown("""
 <style>
+/* Hintergrund im sanften Nature-Gradienten */
 .stApp {
-    background: linear-gradient(135deg, #f9fbf9 0%, #edf4f0 100%);
+    background: linear-gradient(180deg, #f7faf8 0%, #edf4f0 100%);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
-h1, h2, h3 {
-    color: #23382d !important;
-    font-weight: 600;
+
+/* Header & Titel im Handy-Look */
+h1 {
+    color: #1b3026 !important;
+    font-size: 2.2rem !important;
+    font-weight: 700 !important;
+    text-align: center;
+    margin-bottom: 0px;
 }
+p.subtitle {
+    text-align: center;
+    color: #4a6b5d;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+/* Saubere weiße Karten für Ergebnisse */
 div.stAlert, div[data-testid="stVerticalBlock"] > div {
-    border-radius: 16px;
+    border-radius: 20px;
 }
+
+/* Edler grüner Upload- & Aktions-Button */
 .stButton>button {
     background-color: #2d4a3e;
     color: white;
-    border-radius: 10px;
+    border-radius: 12px;
     border: none;
     font-weight: 600;
-    padding: 0.6rem 1.2rem;
-    box-shadow: 0 4px 12px rgba(45, 74, 62, 0.15);
+    padding: 0.75rem 1.5rem;
+    box-shadow: 0 4px 14px rgba(45, 74, 62, 0.2);
     width: 100%;
 }
 .stButton>button:hover {
     background-color: #1f332a;
     color: white;
 }
+
+/* Metrik-Styling */
 [data-testid="stMetricValue"] {
     color: #2d4a3e;
+    font-weight: 700;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# --- OFFIZELLE NACHHALTIGKEITS- & MARKEN-DATENBANK ---
+# --- OFFIZIELLE NACHHALTIGKEITS-DATENBANK ---
 @st.cache_data
-def lade_nachhaltigkeits_datenbank():
+def lade_datenbank():
     return {
         "marken": [
-            # Ultra Fast Fashion & Kritisch
-            {"name": "Shein", "aliase": ["SHEIN", "shein"], "score": 8, "kategorie": "Sehr Kritisch", "begruendung": "Extremes Überproduktionsmodell, intransparente Lieferketten und hoher Einsatz synthetischer Billigfasern."},
+            # Ultra Fast Fashion
+            {"name": "Shein", "aliase": ["SHEIN", "shein"], "score": 8, "kategorie": "Sehr Kritisch", "begruendung": "Extremes Überproduktionsmodell, intransparente Lieferketten und hoher Einsatz billiger Synthetikfasern."},
             {"name": "Temu", "aliase": ["TEMU", "temu"], "score": 8, "kategorie": "Sehr Kritisch", "begruendung": "Kurzlebige Konsumgüter mit hohem Luftfracht-Emissionsanteil."},
             {"name": "AliExpress", "aliase": ["ALIEXPRESS"], "score": 10, "kategorie": "Sehr Kritisch", "begruendung": "Keinerlei standardisierte Umwelt- oder Sozialnachweise."},
             
-            # Klassische Fast Fashion
+            # Fast Fashion
             {"name": "Primark", "aliase": ["PRIMARK"], "score": 15, "kategorie": "Kritisch", "begruendung": "Billigproduktion treibt die Wegwerfkultur; unzureichende existenzsichernde Löhne."},
             {"name": "Zara", "aliase": ["ZARA", "zara", "INDITEX"], "score": 25, "kategorie": "Unter Durchschnitt", "begruendung": "Pionier der Fast-Fashion-Zyklen; trotz kleiner Recycling-Kollektionen dominiert massiver Ressourcenverbrauch."},
             {"name": "Bershka", "aliase": ["BERSHKA"], "score": 25, "kategorie": "Unter Durchschnitt", "begruendung": "Inditex-Tochter mit identisch schnellen Kollektionswechseln."},
@@ -67,8 +88,8 @@ def lade_nachhaltigkeits_datenbank():
             {"name": "Adidas", "aliase": ["ADIDAS"], "score": 48, "kategorie": "Mittelfeld", "begruendung": "Starke Klimaziele und Plastik-Reduktionsprogramme, starkes Konsumwachstum."},
             {"name": "Levi's", "aliase": ["LEVI'S", "LEVIS"], "score": 50, "kategorie": "Mittelfeld", "begruendung": "Langlebiger Denim und Wasserspar-Initiativen, aber überwiegend konventioneller Baumwollanbau."},
 
-            # Offizielle Eco-Pioniere / Top-Ratings
-            {"name": "Patagonia", "aliase": ["PATAGONIA"], "score": 88, "kategorie": "Vorbildlich", "begruendung": "Branchenprimus laut Nachhaltigkeits-Index: 100% Bio-Materialien, Lieferkettentransparenz und Reparaturversprechen."},
+            # Top Eco-Pioniere
+            {"name": "Patagonia", "aliase": ["PATAGONIA"], "score": 88, "kategorie": "Vorbildlich", "begruendung": "Branchenprimus: 100% Bio-Materialien, Lieferkettentransparenz und umfassendes Reparaturversprechen."},
             {"name": "Armedangels", "aliase": ["ARMEDANGELS"], "score": 85, "kategorie": "Vorbildlich", "begruendung": "Streng GOTS-zertifiziert, faire Arbeitsbedingungen und absolut transparenter CO2-Fußabdruck."},
             {"name": "Vaude", "aliase": ["VAUDE"], "score": 86, "kategorie": "Vorbildlich", "begruendung": "Hervorragende Umweltstandards (Green Shape, bluesign) für faire Outdoor-Ausstattung."},
             {"name": "hessnatur", "aliase": ["HESSNATUR"], "score": 90, "kategorie": "Vorbildlich", "begruendung": "Jahrzehntelanger Pionier für reine Naturtextilien und strengste ökologische Richtlinien."},
@@ -77,13 +98,13 @@ def lade_nachhaltigkeits_datenbank():
         ]
     }
 
-# --- INTELLIGENTE MARKEN- & STOFF-ANALYSE ---
-def analyse_text(db_marken, ocr_text):
+# --- PRÄZISE MARKEN- & MATERIAL-ERKENNUNG (OHNE RANDOM-ERFINDUNGEN) ---
+def analysiere_etikett(db_marken, ocr_text):
     if not ocr_text:
         return None
     text_up = ocr_text.upper()
     
-    # 1. Zuerst nach offiziellen Marken & Aliases im Text suchen
+    # 1. Zuerst exakte Markensuche
     for marke in db_marken:
         if marke["name"].upper() in text_up:
             return marke
@@ -91,30 +112,36 @@ def analyse_text(db_marken, ocr_text):
             if alias.upper() in text_up:
                 return marke
                 
-    # 2. Wenn keine Marke erkannt wurde: Stoff- und Material-Auswertung (Waschetikett-Fallback)
-    if "BIO" in text_up or "ORGANIC" in text_up or "GOTS" in text_up or "ORGANISCHE" in text_up:
+    # 2. Wenn keine Marke erkannt wurde: Strikt nach Material auf dem Waschetikett auswerten
+    if "BIO" in text_up or "ORGANIC" in text_up or "GOTS" in text_up:
         return {
-            "name": "Zertifiziertes Bio-Textil", 
+            "name": "Zertifiziertes Bio-Textil (No-Name / Material-Analyse)", 
             "score": 80, 
-            "kategorie": "Nachhaltig (Material)", 
-            "begruendung": "Das Waschetikett weist zertifizierte Bio-Naturfasern aus, was den ökologischen Fußabdruck erheblich verringert."
+            "kategorie": "Nachhaltiges Material", 
+            "begruendung": "Keine Marken-Insignien erkannt, aber das Waschetikett weist zertifizierte Bio-Naturfasern aus."
         }
     if "POLYESTER" in text_up or "ELASTHAN" in text_up or "NYLON" in text_up:
         return {
-            "name": "Synthetik-Faser / Mischgewebe", 
+            "name": "Synthetik-Mischgewebe (Waschetikett)", 
             "score": 35, 
-            "kategorie": "Kritisch (Material)", 
-            "begruendung": "Das Etikett zeigt erdölbasierte Synthetikfasern. Diese sind langlebig, verursachen beim Waschen jedoch Mikroplastik."
+            "kategorie": "Kritischer Stoff", 
+            "begruendung": "Das Etikett zeigt erdölbasierte Synthetikfasern. Langlebig im Gebrauch, aber Verursacher von Mikroplastik beim Waschen."
         }
     if "COTTON" in text_up or "BAUMWOLLE" in text_up:
         return {
-            "name": "Konventionelle Baumwolle", 
+            "name": "Konventionelle Baumwolle (Waschetikett)", 
             "score": 45, 
             "kategorie": "Durchschnitt", 
-            "begruendung": "Konventionelle Baumwolle verbraucht im Anbau sehr viel Wasser und Pestizide, sofern sie nicht explizit als Bio deklariert ist."
+            "begruendung": "Das Etikett zeigt reine Baumwolle (konventioneller Anbau mit hohem Wasser- und Pestizideinsatz)."
         }
         
-    return None
+    # 3. Wenn absolut KEINE Marke und KEIN bekanntes Material erkannt wird -> Ehrlich bleiben, KEINE Random-Marke!
+    return {
+        "name": "Unbekannter Artikel / Etikett", 
+        "score": 40, 
+        "kategorie": "Nicht zugeordnet", 
+        "begruendung": "Es konnte weder eine Marke noch ein klares Material auf dem Foto identifiziert werden. Bitte versuche ein näheres Foto vom Logo oder Waschetikett aufzunehmen."
+    }
 
 # --- FLORENCE-2 MODELL LADEN ---
 @st.cache_resource
@@ -124,20 +151,20 @@ def lade_ki_modell():
     model = AutoModelForCausalLM.from_pretrained("microsoft/Florence-2-base", torch_dtype=torch.float32, trust_remote_code=True).to(device)
     return processor, model, device
 
-# --- BENUTZEROBERFLÄCHE (IM EXAKT GLEICHEN DESIGN) ---
-st.title("🌿 EcoLens")
-st.markdown("#### Nachhaltigkeits-Prüfung per KI & Offizieller Datenbank")
-st.caption("Erkennt automatisch Marken-Logos oder analysiert alternativ die Stoffe auf dem Waschetikett.")
+# --- BENUTZEROBERFLÄCHE (MOBILE STARTPAGE) ---
+st.markdown("<h1>🌿 EcoLens</h1>", unsafe_allow_html=True)
+st.markdown("<p class='subtitle'>Nachhaltigkeit direkt per Foto prüfen</p>", unsafe_allow_html=True)
 
-datenbank = lade_nachhaltigkeits_datenbank()
+datenbank = lade_datenbank()
 
-uploaded_file = st.file_uploader("Foto des Etiketts oder Logos hochladen (JPG / PNG)", type=["jpg", "jpeg", "png"])
+# Zentraler Foto-Upload im Handy-Stil
+uploaded_file = st.file_uploader("Foto aufnehmen oder hochladen", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption="Hochgeladenes Bild", use_container_width=True)
+    st.image(image, caption="Hochgeladenes Foto", use_container_width=True)
     
-    with st.spinner("Lese Text aus und prüfe offizielle Nachhaltigkeitsdaten..."):
+    with st.spinner("Analysiere Etikett..."):
         try:
             processor, model, device = lade_ki_modell()
             inputs = processor(text="<OCR>", images=image.convert("RGB"), return_tensors="pt").to(device)
@@ -145,22 +172,14 @@ if uploaded_file is not None:
                 gen = model.generate(input_ids=inputs["input_ids"], pixel_values=inputs["pixel_values"], max_new_tokens=256, num_beams=3)
             ocr_text = processor.batch_decode(gen, skip_special_tokens=True)[0]
         except Exception as e:
-            ocr_text = "Zara Cotton" # Stabiler Fallback
+            ocr_text = "Unbekannt"
             
-    # Abgleich mit der Datenbank / Stoff-Analyse
-    ergebnis = analyse_text(datenbank["marken"], ocr_text)
-    
-    if not ergebnis:
-        ergebnis = {
-            "name": "Unbekannter Artikel", 
-            "score": 40, 
-            "kategorie": "Durchschnitt", 
-            "begruendung": "Weder eine bekannte Marke noch eindeutige Materialhinweise auf dem Bild erkannt. Standard-Einschätzung für konventionelle Textilien."
-        }
+    # Intelligente Auswertung ohne Willkür
+    ergebnis = analysiere_etikett(datenbank["marken"], ocr_text)
 
     st.markdown("---")
     
-    # Einheitliches Layout (Metriken & Fortschrittsbalken)
+    # Metriken-Layout
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Erkannt", ergebnis["name"])
@@ -170,12 +189,17 @@ if uploaded_file is not None:
     st.markdown(f"### Bewertung: {ergebnis['kategorie']}")
     st.progress(ergebnis["score"] / 100.0)
     
-    # Fundierte Begründung im sauberen Box-Stil
-    st.info(f"💡 **Offizielle Begründung:** {ergebnis['begruendung']}")
+    st.info(f"💡 **Fundierte Begründung:** {ergebnis['begruendung']}")
     
-    with st.expander("🔍 Gelesener Text (OCR-Rohdaten vom Bild)"):
-        st.write(ocr_text if ocr_text else "Kein Text auf dem Bild erkannt.")
+    with st.expander("🔍 Gelesener Text (OCR)"):
+        st.write(ocr_text if ocr_text else "Kein Text erkannt.")
 
 else:
+    # Minimalistischer Start-Zustand (exakt aufgeräumt)
     st.markdown("")
-    st.info("💡 **Tipp:** Du kannst sowohl Fotos von Marken-Etiketten im Nacken als auch von den kleinen Waschetiketten (Materialzusammensetzung) hochladen.")
+    st.markdown("""
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 20px; border: 1px dashed #c2d6cb; text-align: center;">
+        <p style="color: #2d4a3e; font-weight: 600; margin-bottom: 5px;">📸 Foto hochladen oder aufnehmen</p>
+        <p style="color: #718f82; font-size: 0.85rem;">Halte die Kamera auf das Markenlogo oder das weiße Waschetikett in der Kleidung.</p>
+    </div>
+    """, unsafe_allow_html=True)
