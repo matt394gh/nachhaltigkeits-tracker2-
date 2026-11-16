@@ -1,21 +1,27 @@
 import streamlit as st
-from PIL import Image, ImageOps, ImageEnhance
-import easyocr
-import torch
+from PIL import Image
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="EcoLens - KI Etiketten-Scanner",
+    page_title="EcoLens - App",
     page_icon="🌿",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# --- SESSION STATE FÜR NAVIGATION & VERLAUF ---
+# --- SESSION STATE INITIALISIERUNG ---
 if "active_tab" not in st.session_state:
     st.session_state.active_tab = "scan"
 if "scan_history" not in st.session_state:
-    st.session_state.scan_history = []
+    st.session_state.scan_history = [
+        {
+            "name": "🌿 Bio-Baumwolle / GOTS",
+            "score": 88,
+            "kategorie": "Vorbildlich & Nachhaltig",
+            "farbe": "#2e7d32",
+            "begruendung": "Beispiel-Eintrag im Verlauf."
+        }
+    ]
 
 # --- ECHTES MOBILE-APP CSS (HANDY-FRAME & BOTTOM NAV) ---
 st.markdown("""
@@ -108,8 +114,9 @@ header {visibility: hidden;}
     border-radius: 14px !important;
     border: none !important;
     font-weight: 600 !important;
-    padding: 0.65rem 1rem !important;
+    padding: 0.6rem 0.5rem !important;
     width: 100%;
+    font-size: 0.9rem;
 }
 .stButton>button:hover {
     background-color: #1e332a !important;
@@ -122,6 +129,7 @@ header {visibility: hidden;}
     border: 1.5px dashed #a7c7b7;
 }
 
+/* Fixierte Bottom Navigation Bar */
 .bottom-nav-container {
     position: fixed;
     bottom: 0;
@@ -129,120 +137,100 @@ header {visibility: hidden;}
     transform: translateX(-50%);
     width: 100%;
     max-width: 440px;
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(12px);
     border-top: 1px solid #dce8e1;
-    padding: 8px 16px 14px 16px;
+    padding: 10px 16px 16px 16px;
     z-index: 9999;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
 }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. KI-MODELL LALDEN (EASYOCR CACHED) ---
-@st.cache_resource
-def lade_ocr_ki():
-    # Lädt das neuronale OCR-Netzwerk für Deutsch und Englisch einmalig
-    return easyocr.Reader(['en', 'de'], gpu=False)
-
-# --- 2. AUTOMATISCHE KI-TEXTANALYSE DES ETIKETTS ---
-def analysiere_ki_text(erkaennter_text):
-    text_gesamt = " ".join(erkaennter_text).upper()
-
-    if any(w in text_gesamt for w in ["BIO", "ORGANIC", "GOTS", "RECYCLED", "RECYCELT", "TENCEL", "LYOCELL", "HEMP", "HANF", "LINEN", "LEINEN"]):
-        return {
-            "name": "Bio- / Nachhaltiges Textil",
-            "score": 88,
-            "kategorie": "Vorbildlich & Nachhaltig",
-            "farbe": "#2e7d32",
-            "begruendung": f"Die KI hat auf dem Etikett nachhaltige Faser- oder Bio-Hinweise erkannt. Text-Snippets: '{text_gesamt[:60]}...'"
-        }
-    
-    if any(w in text_gesamt for w in ["POLYESTER", "ELASTHAN", "ELASTANE", "NYLON", "POLYAMID", "ACRYLIC", "VISCOSE", "VISKOSE"]):
-        return {
-            "name": "Synthetik- / Kunstfaser",
-            "score": 30,
-            "kategorie": "Kritischer Stoff",
-            "farbe": "#c62828",
-            "begruendung": f"Die KI hat erdölbasierte Kunstfasern auf dem Waschetikett identifiziert. Text-Snippets: '{text_gesamt[:60]}...'"
-        }
-
-    if any(w in text_gesamt for w in ["COTTON", "BAUMWOLLE", "COTON", "ALGODON", "WOOL", "WOLLE"]):
-        return {
-            "name": "Konventionelle Baumwolle / Naturfaser",
-            "score": 48,
-            "kategorie": "Mittelfeld",
-            "farbe": "#ef6c00",
-            "begruendung": f"Die KI hat Naturfasern (wie Baumwolle/Wolle) ohne Biosiegel ausgelesen. Text-Snippets: '{text_gesamt[:60]}...'"
-        }
-
-    return {
-        "name": "Standard Textil (KI-Analyse)",
-        "score": 42,
-        "kategorie": "Standard-Ware",
-        "farbe": "#607d8b",
-        "begruendung": f"Die KI hat das Etikett gescannt, aber keine spezifischen Öko-Zertifikate gefunden. Erkannter Text: '{text_gesamt[:50]}'"
+# --- MATERIAL-DATENBANK ---
+MATERIAL_DATEN = {
+    "🌿 Bio-Baumwolle / GOTS": {
+        "score": 88,
+        "kategorie": "Vorbildlich & Nachhaltig",
+        "farbe": "#2e7d32",
+        "begruendung": "Zertifizierte Bio-Naturfaser. Ohne synthetische Pestizide angebaut."
+    },
+    "♻️ Recyceltes Polyester / Nylon": {
+        "score": 75,
+        "kategorie": "Gutes Recycling-Material",
+        "farbe": "#388e3c",
+        "begruendung": "Hergestellt aus recycelten Plastikflaschen oder Alttextilien."
+    },
+    "🌱 Leinen / Hanf / Tencel": {
+        "score": 90,
+        "kategorie": "Hervorragende Öko-Bilanz",
+        "farbe": "#1b5e20",
+        "begruendung": "Sehr nachhaltige Naturfasern mit minimalem Wasserbedarf."
+    },
+    "☁️ Konventionelle Baumwolle": {
+        "score": 48,
+        "kategorie": "Mittelfeld (Konventionell)",
+        "farbe": "#ef6c00",
+        "begruendung": "Biologisch abbaubar, aber im Anbau wasser- und pestizidintensiv."
+    },
+    "🧪 Polyester / Viskose / Elastan": {
+        "score": 30,
+        "kategorie": "Kritischer Stoff",
+        "farbe": "#c62828",
+        "begruendung": "Erdölbasierte Kunstfaser. Verursacht beim Waschen Mikroplastik."
     }
+}
 
 # --- TOP APP HEADER ---
 st.markdown("""
 <div class="app-header">
     <p class="app-title">🌿 EcoLens</p>
-    <span class="app-badge">KI ETIKETTEN-SCANNER</span>
+    <span class="app-badge">APP AKTIV</span>
 </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB 1: KI-SCANNEN
+# SEITENINHALT JE NACH AKTIVEM TAB
 # ==========================================
-if st.session_state.active_tab == "scan":
+tab = st.session_state.active_tab
+
+if tab == "scan":
     st.markdown("""
     <div class="scan-card">
-        <div class="scan-icon-circle">📸</div>
-        <h3 style="margin:0 0 6px 0; color:#1b3026; font-size:1.15rem;">Waschetikett mit KI scannen</h3>
+        <div class="scan-icon-circle">🏷️</div>
+        <h3 style="margin:0 0 6px 0; color:#1b3026; font-size:1.15rem;">Waschetikett analysieren</h3>
         <p style="margin:0; color:#5c7a6c; font-size:0.85rem;">
-            Lade ein Foto des Waschetiketts hoch. Die neuronale KI liest den Text automatisch aus und wertet ihn aus.
+            Foto hochladen und Material vom Waschetikett auswählen.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("Etikett hochladen", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader("Etikett-Foto hochladen", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
     
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
         st.image(image, use_container_width=True)
 
-        with st.spinner("🤖 KI analysiert und liest das Etikett aus..."):
-            try:
-                # Bild für OCR optimieren (Kontrast & Schärfe erhöhen)
-                img_cv = ImageOps.exif_transpose(image.convert("RGB"))
-                img_cv = ImageEnhance.Contrast(img_cv).enhance(1.5)
-                img_cv = ImageEnhance.Sharpness(img_cv).enhance(1.8)
-                
-                # Als temporäres Bild speichern für die OCR-KI
-                img_path = "temp_etikett.jpg"
-                img_cv.save(img_path)
+    st.markdown("<p style='font-size:0.88rem; color:#1b3026; font-weight:700; margin-top:10px;'>👉 Was steht auf dem Waschetikett?</p>", unsafe_allow_html=True)
+    
+    ausgewaehltes_material = st.selectbox(
+        "Material wählen",
+        list(MATERIAL_DATEN.keys()),
+        label_visibility="collapsed"
+    )
 
-                # EasyOCR ausführen
-                reader = lade_ocr_ki()
-                ergebnisse = reader.readtext(img_path, detail=0)
-                
-                # Text auswerten
-                ergebnis = analysiere_ki_text(ergebnisse)
+    if st.button("🔍 Etikett auswerten"):
+        info = MATERIAL_DATEN[ausgewaehltes_material]
+        ergebnis = {
+            "name": ausgewaehltes_material,
+            "score": info["score"],
+            "kategorie": info["kategorie"],
+            "farbe": info["farbe"],
+            "begruendung": info["begruendung"]
+        }
 
-            except Exception as e:
-                ergebnis = {
-                    "name": "Analyse-Fehler",
-                    "score": 40,
-                    "kategorie": "Fehler bei KI-Auslese",
-                    "farbe": "#c62828",
-                    "begruendung": f"Die KI konnte das Bild nicht verarbeiten: {e}"
-                }
-                ergebnisse = []
-
-        # In den Verlauf eintragen
-        if not st.session_state.scan_history or st.session_state.scan_history[0]["name"] != ergebnis["name"]:
-            st.session_state.scan_history.insert(0, ergebnis)
+        # Zu Beginn des Verlaufs hinzufügen
+        st.session_state.scan_history.insert(0, ergebnis)
 
         st.markdown(f"""
         <div class="result-card">
@@ -257,21 +245,15 @@ if st.session_state.active_tab == "scan":
         with col1:
             st.metric("Eco Score", f"{ergebnis['score']} / 100")
         with col2:
-            st.metric("KI-Status", "Ausgelesen ✓")
+            st.metric("Status", "Erfolgreich ✓")
 
         st.progress(ergebnis["score"] / 100.0)
-        st.info(f"💡 **KI-Begründung:** {ergebnis['begruendung']}")
+        st.info(f"💡 **Auswertung:** {ergebnis['begruendung']}")
 
-        with st.expander("🔍 Von der KI erkannte Roh-Wörter"):
-            st.write(ergebnisse if ergebnisse else "Kein Text erkannt.")
-
-# ==========================================
-# TAB 2: VERLAUF
-# ==========================================
-elif st.session_state.active_tab == "history":
-    st.markdown("<h3 style='color:#1b3026; margin-bottom:12px;'>🕒 KI-Scan Verlauf</h3>", unsafe_allow_html=True)
+elif tab == "history":
+    st.markdown("<h3 style='color:#1b3026; margin-bottom:12px;'>🕒 Analysierte Etiketten</h3>", unsafe_allow_html=True)
     if not st.session_state.scan_history:
-        st.info("Noch keine Etiketten gescannt.")
+        st.info("Noch keine Etiketten im Verlauf.")
     else:
         for item in st.session_state.scan_history:
             st.markdown(f"""
@@ -287,38 +269,40 @@ elif st.session_state.active_tab == "history":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-        if st.button("🗑️ Verlauf löschen"):
+        
+        if st.button("🗑️ Verlauf leeren"):
             st.session_state.scan_history = []
             st.rerun()
 
-# ==========================================
-# TAB 3: INFO
-# ==========================================
-elif st.session_state.active_tab == "info":
-    st.markdown("<h3 style='color:#1b3026; margin-bottom:12px;'>🌱 Über EcoLens KI</h3>", unsafe_allow_html=True)
+elif tab == "info":
+    st.markdown("<h3 style='color:#1b3026; margin-bottom:12px;'>🌱 Über EcoLens</h3>", unsafe_allow_html=True)
     st.markdown("""
     <div class="result-card">
         <p style="color:#23382d; font-size:0.92rem; line-height:1.5;">
-            EcoLens nutzt ein neuronales OCR-Modell (Deep Learning / EasyOCR), um den Text auf Waschetiketten vollautomatisch zu erkennen und nach Nachhaltigkeitskriterien zu bewerten.
+            <strong>EcoLens</strong> ist deine mobile App zur schnellen und zuverlässigen Nachhaltigkeitsanalyse von Kleidungsstücken und Waschetiketten.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# FIXIERTE BOTTOM NAVIGATION BAR
+# FIXIERTE BOTTOM NAVIGATION BAR (STABIL)
 # ==========================================
 st.markdown('<div class="bottom-nav-container">', unsafe_allow_html=True)
-nav_col1, nav_col2, nav_col3 = st.columns(3)
-with nav_col1:
-    if st.button("📸 Scannen", key="nav_scan"):
+nav1, nav2, nav3 = st.columns(3)
+
+with nav1:
+    if st.button("🏷️ Scannen", use_container_width=True):
         st.session_state.active_tab = "scan"
         st.rerun()
-with nav_col2:
-    if st.button("🕒 Verlauf", key="nav_hist"):
+
+with nav2:
+    if st.button("🕒 Verlauf", use_container_width=True):
         st.session_state.active_tab = "history"
         st.rerun()
-with nav_col3:
-    if st.button("ℹ️ Info", key="nav_info"):
+
+with nav3:
+    if st.button("ℹ️ Info", use_container_width=True):
         st.session_state.active_tab = "info"
         st.rerun()
+
 st.markdown('</div>', unsafe_allow_html=True)
