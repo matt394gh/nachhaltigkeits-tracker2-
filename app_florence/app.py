@@ -1,6 +1,5 @@
-
-   import streamlit as st
-from PIL import Image, ImageOps
+import streamlit as st
+from PIL import Image
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
@@ -16,7 +15,7 @@ if "active_tab" not in st.session_state:
 if "scan_history" not in st.session_state:
     st.session_state.scan_history = []
 
-# --- MOBILE-APP CSS (HANDY-FRAME & BOTTOM NAV) ---
+# --- ECHTES MOBILE-APP CSS (HANDY-FRAME & BOTTOM NAV) ---
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
@@ -189,7 +188,7 @@ if st.session_state.active_tab == "scan":
         <div class="scan-icon-circle">🏷️</div>
         <h3 style="margin:0 0 6px 0; color:#1b3026; font-size:1.15rem;">Waschetikett analysieren</h3>
         <p style="margin:0; color:#5c7a6c; font-size:0.85rem;">
-            Foto hochladen und Material vom Etikett direkt auswählen – 100% präzise ohne OCR-Fehler.
+            Foto hochladen und Material vom Waschetikett auswählen für eine sofortige, präzise Bewertung.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -202,7 +201,6 @@ if st.session_state.active_tab == "scan":
 
     st.markdown("<p style='font-size:0.88rem; color:#1b3026; font-weight:700; margin-top:10px;'>👉 Was steht auf dem Waschetikett?</p>", unsafe_allow_html=True)
     
-    # Schnell-Auswahl Buttons für die echten Materialien
     ausgewaehltes_material = st.selectbox(
         "Material wählen",
         list(MATERIAL_DATEN.keys()),
@@ -274,7 +272,7 @@ elif st.session_state.active_tab == "info":
     st.markdown("""
     <div class="result-card">
         <p style="color:#23382d; font-size:0.92rem; line-height:1.5;">
-            Da winzige Waschetiketten-Schriften oft schwer von Kameras lesbar sind, garantiert dieser professionelle Modus absolute Zuverlässigkeit. Foto hochladen, Material antippen – fertig!
+            EcoLens liefert dir im minimalistischen Handy-Design sofortige Nachhaltigkeitsanalysen für Textilien basierend auf dem Waschetikett.
         </p>
     </div>
     """, unsafe_allow_html=True)
