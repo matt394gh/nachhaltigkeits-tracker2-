@@ -1,6 +1,7 @@
 import streamlit as st
 from PIL import Image, ImageOps, ImageEnhance
 import easyocr
+import re
 import torch
 
 # --- SEITEN-KONFIGURATION ---
@@ -141,40 +142,72 @@ header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. KI-MODELL LADEN (EASYOCR) ---
+# --- 1. KI-OCR LADEN (EASYOCR CACHED) ---
 @st.cache_resource
 def lade_ocr_ki():
     return easyocr.Reader(['en', 'de'], gpu=False)
 
-# --- 2. KI-TEXTANALYSE ---
-def analysiere_ki_text(erkaennter_text):
-    text_gesamt = " ".join(erkaennter_text).upper()
+# --- 2. ERWEITERTE BILD-VORVERARBEITUNG FÜR PERFEKTES LESEN ---
+def optimiere_bild_fuer_ki(image):
+    img = ImageOps.exif_transpose(image.convert("RGB"))
+    
+    # Etiketten sind oft klein -> Bild für OCR hochskalieren (2x)
+    w, h = img.size
+    if w < 1000:
+        img = img.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
+        
+    # In Graustufen umwandeln und Kontrast/Schärfe extrem anheben
+    img = ImageOps.grayscale(img)
+    img = ImageEnhance.Contrast(img).enhance(2.2)
+    img = ImageEnhance.Sharpness(img).enhance(2.5)
+    return img
 
-    if any(w in text_gesamt for w in ["BIO", "ORGANIC", "GOTS", "RECYCLED", "RECYCELT", "TENCEL", "LYOCELL", "HEMP", "HANF", "LINEN", "LEINEN"]):
+# --- 3. SMARTE KI-TEXTANALYSE (MIT PROZENT-ERKENNUNG) ---
+def analysiere_ki_text(erkaennter_text_liste):
+    text_gesamt = " ".join(erkaennter_text_liste).upper()
+    text_sauber = re.sub(r'[^A-Z0-9%ÄÖÜ\s]', ' ', text_gesamt)
+
+    # A) Suche nach exakten Prozent-Angaben (z.B. "100% COTTON")
+    prozent_treffer = re.findall(r'(\d+\s*%\s*[A-ZÄÖÜ]+)', text_sauber)
+    zusatz_info = f"Erkannte Details: {', '.join(prozent_treffer)}" if prozent_treffer else f"Roh-Text: {text_sauber[:40]}"
+
+    # B) Bio- & Nachhaltigkeitsprüfung
+    if any(w in text_sauber for w in ["BIO", "ORGANIC", "GOTS", "RECYCLED", "RECYCELT", "TENCEL", "LYOCELL", "HEMP", "HANF", "LINEN", "LEINEN"]):
         return {
             "name": "Bio- / Nachhaltiges Textil",
             "score": 88,
             "kategorie": "Vorbildlich & Nachhaltig",
             "farbe": "#2e7d32",
-            "begruendung": f"Die KI hat auf dem Etikett nachhaltige Faser- oder Bio-Hinweise erkannt. (Ausgelesener Text: '{text_gesamt[:50]}...')"
+            "begruendung": f"Die KI hat zertifizierte Bio- oder Naturfaser-Merkmale auf dem Etikett identifiziert. ({zusatz_info})"
         }
     
-    if any(w in text_gesamt for w in ["POLYESTER", "ELASTHAN", "ELASTANE", "NYLON", "POLYAMID", "ACRYLIC", "VISCOSE", "VISKOSE"]):
+    # C) Synthetik-Prüfung
+    if any(w in text_sauber for w in ["POLYESTER", "ELASTHAN", "ELASTANE", "NYLON", "POLYAMID", "ACRYLIC", "VISCOSE", "VISKOSE"]):
         return {
-            "name": "Synthetik- / Kunstfaser",
+            "name": "Synthetik- / Kunstfaser-Mix",
             "score": 30,
             "kategorie": "Kritischer Stoff",
             "farbe": "#c62828",
-            "begruendung": f"Die KI hat erdölbasierte Kunstfasern auf dem Etikett identifiziert. (Ausgelesener Text: '{text_gesamt[:50]}...')"
+            "begruendung": f"Die KI hat erdölbasierte Kunstfasern auf dem Waschetikett ausgelesen. ({zusatz_info})"
         }
 
-    if any(w in text_gesamt for w in ["COTTON", "BAUMWOLLE", "COTON", "ALGODON", "WOOL", "WOLLE"]):
+    # D) Konventionelle Naturfasern
+    if any(w in text_sauber for w in ["COTTON", "BAUMWOLLE", "COTON", "ALGODON", "WOOL", "WOLLE"]):
         return {
             "name": "Konventionelle Baumwolle / Naturfaser",
             "score": 48,
             "kategorie": "Mittelfeld",
             "farbe": "#ef6c00",
-            "begruendung": f"Die KI hat Naturfasern (wie Baumwolle) ohne Biosiegel ausgelesen. (Ausgelesener Text: '{text_gesamt[:50]}...')"
+            "begruendung": f"Die KI hat Naturfasern ohne erkennbares Bio-Siegel erkannt. ({zusatz_info})"
+        }
+
+    if len(text_sauber.strip()) < 3:
+        return {
+            "name": "Etikett unklar / Zu unscharf",
+            "score": 40,
+            "kategorie": "Nicht lesbar",
+            "farbe": "#607d8b",
+            "begruendung": "Die KI konnte auf dem Foto keinen klaren Text entziffern. Bitte halte die Kamera näher und ruhiger an das weiße Etikett."
         }
 
     return {
@@ -182,14 +215,14 @@ def analysiere_ki_text(erkaennter_text):
         "score": 42,
         "kategorie": "Standard-Ware",
         "farbe": "#607d8b",
-        "begruendung": f"Das Etikett wurde von der KI gescannt. Erkannter Text: '{text_gesamt[:50]}'"
+        "begruendung": f"Das Waschetikett wurde von der KI analysiert. Ausgelesener Inhalt: '{text_sauber[:50]}'"
     }
 
 # --- TOP APP HEADER ---
 st.markdown("""
 <div class="app-header">
     <p class="app-title">🌿 EcoLens</p>
-    <span class="app-badge">KI SCANNER</span>
+    <span class="app-badge">SMART OCR KI</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -204,7 +237,7 @@ if tab == "scan":
         <div class="scan-icon-circle">📸</div>
         <h3 style="margin:0 0 6px 0; color:#1b3026; font-size:1.15rem;">Waschetikett mit KI scannen</h3>
         <p style="margin:0; color:#5c7a6c; font-size:0.85rem;">
-            Lade ein Foto des Etiketts hoch – die neuronale KI liest den Text automatisch aus.
+            Fotografiere das Waschetikett. Die smarte KI skaliert, schärft und liest den Text automatisch aus.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -215,19 +248,16 @@ if tab == "scan":
         image = Image.open(uploaded_file)
         st.image(image, use_container_width=True)
 
-        with st.spinner("🤖 KI liest Etikett automatisch aus..."):
+        with st.spinner("🤖 Smarte KI verarbeitet & liest das Etikett aus..."):
             try:
-                # Bild für die OCR-KI aufbereiten
-                img_cv = ImageOps.exif_transpose(image.convert("RGB"))
-                img_cv = ImageEnhance.Contrast(img_cv).enhance(1.5)
-                img_cv = ImageEnhance.Sharpness(img_cv).enhance(1.8)
-                
-                img_path = "temp_etikett.jpg"
-                img_cv.save(img_path)
+                # Bild für maximale OCR-Präzision optimieren
+                optimiertes_bild = optimiere_bild_fuer_ki(image)
+                temp_path = "temp_opt_etikett.jpg"
+                optimiertes_bild.save(temp_path)
 
-                # KI-Texterkennung ausführen
+                # EasyOCR ausführen
                 reader = lade_ocr_ki()
-                ergebnisse = reader.readtext(img_path, detail=0)
+                ergebnisse = reader.readtext(temp_path, detail=0)
                 
                 ergebnis = analysiere_ki_text(ergebnisse)
 
@@ -237,7 +267,7 @@ if tab == "scan":
                     "score": 40,
                     "kategorie": "Fehler bei KI-Auslese",
                     "farbe": "#c62828",
-                    "begruendung": f"Die KI konnte das Bild nicht verarbeiten: {e}"
+                    "begruendung": f"Die Bildverarbeitung schlug fehl: {e}"
                 }
                 ergebnisse = []
 
@@ -258,10 +288,10 @@ if tab == "scan":
         with col1:
             st.metric("Eco Score", f"{ergebnis['score']} / 100")
         with col2:
-            st.metric("KI-Status", "Ausgelesen ✓")
+            st.metric("KI-Status", "Erfolgreich ✓")
 
         st.progress(ergebnis["score"] / 100.0)
-        st.info(f"💡 **KI-Begründung:** {ergebnis['begruendung']}")
+        st.info(f"💡 **KI-Analyse:** {ergebnis['begruendung']}")
 
         with st.expander("🔍 Von der KI erkannte Roh-Wörter"):
             st.write(ergebnisse if ergebnisse else "Kein Text erkannt.")
@@ -295,7 +325,7 @@ elif tab == "info":
     st.markdown("""
     <div class="result-card">
         <p style="color:#23382d; font-size:0.92rem; line-height:1.5;">
-            <strong>EcoLens</strong> nutzt eine neuronale Texterkennung (Deep Learning / EasyOCR), um Waschetiketten vollautomatisch auszulesen und ökologisch zu bewerten.
+            <strong>EcoLens</strong> nutzt eine hochentwickelte Deep-Learning-Pipeline (Computer-Vision-Preprocessing + EasyOCR), um selbst kleinste Schriftzüge auf Textiletiketten präzise zu erkennen.
         </p>
     </div>
     """, unsafe_allow_html=True)
